@@ -21,15 +21,26 @@
         <div class="notice success">File uploaded successfully.</div>
         {% endif %}
 
+        {% if request.query_params.get("deleted") %}
+        <div class="notice success">File deleted successfully.</div>
+        {% endif %}
+
+        {% if request.query_params.get("deleted_all") is not none %}
+        <div class="notice success">Deleted {{ request.query_params.get("deleted_all") }} file(s).</div>
+        {% endif %}
+
         {% if request.query_params.get("error") %}
         <div class="notice error">
-            Upload failed.
             {% if request.query_params.get("error") == "invalid-key" %}
-            Check the API key.
+            Upload failed. Check the API key.
+            {% elif request.query_params.get("error") == "invalid-admin-key" %}
+            Delete failed. Check the Admin Key.
+            {% elif request.query_params.get("error") == "file-not-found" %}
+            The selected file no longer exists.
             {% elif request.query_params.get("error") == "413" %}
-            The file is larger than the configured limit.
+            Upload failed. The file is larger than the configured limit.
             {% else %}
-            Check the file type and request.
+            Request failed. Check the file type and request.
             {% endif %}
         </div>
         {% endif %}
@@ -74,26 +85,47 @@
         </section>
 
         <section class="panel">
-            <div class="panel-heading">
+            <div class="panel-heading file-panel-heading">
                 <div>
                     <p class="eyebrow">INBOX</p>
                     <h2>Received files</h2>
                 </div>
+
+                {% if files %}
+                <div class="admin-tools">
+                    <label class="admin-key-field">
+                        <span>Admin Key</span>
+                        <input id="admin-key" type="password" placeholder="ADMIN_KEY" autocomplete="off">
+                    </label>
+
+                    <form class="admin-protected delete-all-form" action="/ui/delete-all" method="post" data-confirm="Delete all received files? This cannot be undone.">
+                        <input type="hidden" name="admin_key">
+                        <button class="danger-button" type="submit">Delete all</button>
+                    </form>
+                </div>
+                {% endif %}
             </div>
 
             {% if files %}
             <div class="file-list">
                 {% for file in files %}
-                <a class="file-row" href="/files/{{ file.name | urlencode }}">
-                    <div class="file-main">
-                        <span class="file-icon">TXT</span>
-                        <div>
-                            <strong>{{ file.name }}</strong>
-                            <small>{{ file.modified }}</small>
+                <div class="file-row">
+                    <a class="file-link" href="/files/{{ file.name | urlencode }}">
+                        <div class="file-main">
+                            <span class="file-icon">TXT</span>
+                            <div class="file-copy">
+                                <strong>{{ file.name }}</strong>
+                                <small>{{ file.modified }}</small>
+                            </div>
                         </div>
-                    </div>
-                    <span class="file-size">{{ file.size_human }}</span>
-                </a>
+                        <span class="file-size">{{ file.size_human }}</span>
+                    </a>
+
+                    <form class="admin-protected delete-form" action="/ui/delete/{{ file.name | urlencode }}" method="post" data-confirm="Delete {{ file.name }}?">
+                        <input type="hidden" name="admin_key">
+                        <button class="icon-button" type="submit" aria-label="Delete {{ file.name }}" title="Delete file">Delete</button>
+                    </form>
+                </div>
                 {% endfor %}
             </div>
             {% else %}
@@ -109,5 +141,31 @@
             <span>Health: <code>GET /health</code></span>
         </footer>
     </main>
+
+    <script>
+        const adminKeyInput = document.getElementById("admin-key");
+
+        document.querySelectorAll("form.admin-protected").forEach((form) => {
+            form.addEventListener("submit", (event) => {
+                const key = adminKeyInput ? adminKeyInput.value.trim() : "";
+                if (!key) {
+                    event.preventDefault();
+                    if (adminKeyInput) {
+                        adminKeyInput.focus();
+                    }
+                    alert("Enter the Admin Key first.");
+                    return;
+                }
+
+                const message = form.dataset.confirm;
+                if (message && !window.confirm(message)) {
+                    event.preventDefault();
+                    return;
+                }
+
+                form.querySelector('input[name="admin_key"]').value = key;
+            });
+        });
+    </script>
 </body>
 </html>
