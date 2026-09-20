@@ -5,8 +5,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import FastAPI, File, Header, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, File, Form, Header, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 
 APP_TITLE = os.getenv("APP_TITLE", "Digispark Upload Lab")
 API_KEY = os.getenv("UPLOAD_API_KEY", "change-me")
@@ -19,6 +21,7 @@ ALLOWED_EXTENSIONS = {
     if ext.strip()
 }
 
+BASE_DIR = Path(__file__).resolve().parent
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 app = FastAPI(
@@ -27,6 +30,9 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url=None,
 )
+
+app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
+templates = Jinja2Templates(directory=BASE_DIR / "templates")
 
 
 def safe_filename(filename: str | None) -> str:
@@ -113,6 +119,43 @@ def health() -> dict:
         "allowed_extensions": sorted(ALLOWED_EXTENSIONS),
         "max_file_size_mb": MAX_FILE_SIZE_MB,
     }
+
+
+@app.get("/", response_class=HTMLResponse)
+def dashboard(request: Request):
+    files = file_items()
+    total_bytes = sum(item["size"] for item in files)
+    return templates.TemplateResponse(
+        request=request,
+        name="index.html",
+        context={
+            "app_title": APP_TITLE,
+            "files": files,
+            "file_count": len(files),
+            "total_size": human_size(total_bytes),
+            "max_file_size_mb": MAX_FILE_SIZE_MB,
+            "allowed_extensions": ", ".join(sorted(ALLOWED_EXTENSIONS)),
+        },
+    )
+
+
+@app.post("/ui/upload")
+async def ui_upload(
+    file: Annotated[UploadFile, File(...)],
+    api_key: Annotated[str, Form(...)],
+):
+    if api_key != API_KEY:
+        return RedirectResponse(url="/?error=invalid-key", status_code=303)
+
+    try:
+        await persist_upload(file)
+    except HTTPException as exc:
+        return RedirectResponse(
+            url=f"/?error={exc.status_code}",
+            status_code=303,
+        )
+
+    return RedirectResponse(url="/?uploaded=1", status_code=303)
 
 
 @app.post("/api/upload")

@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ app_title }}</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <main class="shell">
+        <header class="topbar">
+            <div>
+                <p class="eyebrow">LOCAL LAB</p>
+                <h1>{{ app_title }}</h1>
+                <p class="subtitle">Minimal upload endpoint and file browser for a controlled Digispark lab.</p>
+            </div>
+            <a class="ghost-button" href="/docs">API Docs</a>
+        </header>
+
+        {% if request.query_params.get("uploaded") %}
+        <div class="notice success">File uploaded successfully.</div>
+        {% endif %}
+
+        {% if request.query_params.get("error") %}
+        <div class="notice error">
+            Upload failed.
+            {% if request.query_params.get("error") == "invalid-key" %}
+            Check the API key.
+            {% elif request.query_params.get("error") == "413" %}
+            The file is larger than the configured limit.
+            {% else %}
+            Check the file type and request.
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <section class="stats">
+            <article class="stat-card">
+                <span>Files</span>
+                <strong>{{ file_count }}</strong>
+            </article>
+            <article class="stat-card">
+                <span>Storage used</span>
+                <strong>{{ total_size }}</strong>
+            </article>
+            <article class="stat-card">
+                <span>Max file</span>
+                <strong>{{ max_file_size_mb }} MB</strong>
+            </article>
+        </section>
+
+        <section class="panel">
+            <div class="panel-heading">
+                <div>
+                    <p class="eyebrow">UPLOAD</p>
+                    <h2>Send a test file</h2>
+                </div>
+                <span class="hint">Allowed: {{ allowed_extensions }}</span>
+            </div>
+
+            <form class="upload-form" action="/ui/upload" method="post" enctype="multipart/form-data">
+                <label>
+                    <span>File</span>
+                    <input name="file" type="file" accept=".txt" required>
+                </label>
+
+                <label>
+                    <span>API key</span>
+                    <input name="api_key" type="password" placeholder="UPLOAD_API_KEY" required>
+                </label>
+
+                <button type="submit">Upload file</button>
+            </form>
+        </section>
+
+        <section class="panel">
+            <div class="panel-heading">
+                <div>
+                    <p class="eyebrow">INBOX</p>
+                    <h2>Received files</h2>
+                </div>
+            </div>
+
+            {% if files %}
+            <div class="file-list">
+                {% for file in files %}
+                <a class="file-row" href="/files/{{ file.name | urlencode }}">
+                    <div class="file-main">
+                        <span class="file-icon">TXT</span>
+                        <div>
+                            <strong>{{ file.name }}</strong>
+                            <small>{{ file.modified }}</small>
+                        </div>
+                    </div>
+                    <span class="file-size">{{ file.size_human }}</span>
+                </a>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <p>No files received yet.</p>
+                <span>Upload a .txt file from the form or API.</span>
+            </div>
+            {% endif %}
+        </section>
+
+        <footer>
+            <span>Endpoint: <code>POST /api/upload</code></span>
+            <span>Health: <code>GET /health</code></span>
+        </footer>
+    </main>
+</body>
+</html>
